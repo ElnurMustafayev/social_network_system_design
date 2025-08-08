@@ -1,0 +1,263 @@
+openapi: 3.0.4
+
+info:
+  title: social_network api - OpenAPI 3.0
+  description: |-
+    Документация, написанная для social_network API базированная на [OpenAPI 3.1.1 спецификациях](https://swagger.io/specification/#version_3.1.1)
+
+    Полезные ссылки:
+    - [web editor](https://editor.swagger.io/)
+    - [vs code extension](https://marketplace.visualstudio.com/items?itemName=42Crunch.vscode-openapi)
+  version: 1.0.0
+  contact:
+    email: elnur.mustafayeev@gmail.com
+  license:
+    name: Apache 2.0
+    url: https://www.apache.org/licenses/LICENSE-2.0.html
+
+externalDocs:
+  description: social_network repository
+  url: https://github.com/ElnurMustafayev/social_network_system_design
+
+servers:
+  - url: https://social_network.com/api/v1
+
+tags:
+  - name: post
+    description: Пост, который публикуется на сайте пользователем
+    externalDocs:
+      description: Сущность представлена в этом файле
+      url: https://github.com/ElnurMustafayev/social_network_system_design/blob/main/Entities.md
+  
+  - name: reaction
+    description: Реакция, которую пользователь ставит на пост
+    externalDocs:
+      description: Сущность представлена в этом файле
+      url: https://github.com/ElnurMustafayev/social_network_system_design/blob/main/Entities.md
+  
+  - name: comment
+    description: Комментарий, который пользователь пишет под постом
+    externalDocs:
+      description: Сущность представлена в этом файле
+      url: https://github.com/ElnurMustafayev/social_network_system_design/blob/main/Entities.md
+
+paths:
+  /post:
+    post:
+      tags:
+        - post
+      summary: Пользователь создаёт новый его пост
+      operationId: createPost
+      requestBody:
+        description: Модель поста
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AddPostRequestDto'
+      responses:
+        '200':
+          description: Пост успешно создался
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PostCreatedResponseDto'
+        '400':
+          description: Ошибка входных параметров
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BadRequestResponseDto'
+        '500':
+          description: Непредвиденная ошибка
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InternalServerErrorResponseDto"
+      security:
+        - social_network_auth:
+            - write:post
+        - Bearer:
+            - write:post
+    
+  /post/{postId}:
+    get:
+      summary: Получение любого поста по его ID 
+      operationId: getPostById
+      tags:
+        - post
+      parameters:
+        - name: postId
+          in: path
+          required: true
+          description: ID поста, который необходимо получить
+          schema:
+            type: integer
+            format: int64
+      responses:
+        '200':
+          description: Пост успешно найден
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PostDto'
+        '400':
+          description: Ошибка входных параметров
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BadRequestResponseDto'
+        '500':
+          description: Непредвиденная ошибка
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InternalServerErrorResponseDto"
+      security:
+        - social_network_auth:
+            - "read:post"
+        - Bearer:
+            - "read:post"
+
+components:
+  schemas:
+    AddPostRequestDto:
+      type: object
+      required:
+        - title
+        - text
+      properties:
+        title: 
+          type: string
+          example: This is title
+        text:
+          type: string
+          example: This is description
+        location: 
+          $ref: '#/components/schemas/LocationDto'
+
+    PostCreatedResponseDto:
+      required:
+        - id
+      type: object
+      properties:
+        id:
+          description: ID созданного поста
+          type: integer
+          format: int64
+          example: 0
+
+    PhotoDto:
+      type: object
+      required:
+        - id
+        - path
+      properties:
+        id:
+          type: string
+          format: uid
+          example: '32abcc57-e7e1-4cac-b6c8-25801c7bf6b9'
+        is_preview:
+          type: boolean
+          example: null
+        path:
+          type: string
+          example: '/example/path/32abcc57-e7e1-4cac-b6c8-25801c7bf6b9.png'
+
+    LocationDto: 
+      type: object
+      required:
+        - longitude
+        - latitude
+      properties:
+        longitude:
+          type: integer
+          format: float
+          example: 40.1521651
+        latitude:
+          type: integer
+          format: float
+          example: 47.615563
+
+    PostDto:
+      type: object
+      description: Модель поста
+      required:
+        - id
+        - title
+        - text
+        - author_id
+        - created_at
+        - likes_count
+      properties:
+        id:
+          description: Идентификатор поста
+          type: number
+          format: int64
+          example: 100500
+        title: 
+          type: string
+          example: This is title
+        text:
+          type: string
+          example: This is description
+        author_id:
+          description: Идентификатор автора поста
+          type: number
+          format: int64
+          example: 700
+        created_at:
+          description: Дата и время создания поста в системе
+          type: string
+          format: date-time
+          example: '05-08-2025'
+        likes_count:
+          type: number
+          format: int64
+        photos:
+          type: array
+          items:
+            $ref: "#/components/schemas/PhotoDto"
+        location: 
+          $ref: '#/components/schemas/LocationDto'
+
+    BadRequestResponseDto:
+      description: Модель описывающая ошибку 400
+      required:
+        - message
+        - code
+      properties:
+        message:
+          type: string
+          example: Incorrect DateTime format!
+        code:
+          type: string
+          description: Тип валидации
+          enum:
+            - CUSTOM_VALIDATION
+            - INCORRECT_FORMAT
+            - VALUE_OUT_OF_RANGE
+            - ID_NOT_FOUND
+
+    InternalServerErrorResponseDto:
+      description: Модель описывающая ошибку 500
+      required:
+        - message
+      properties:
+        message:
+          type: string
+
+  securitySchemes:
+    Bearer:
+      type: apiKey
+      name: Authorize
+      in: header
+    
+    OAuth:
+      type: oauth2
+      flows:
+        implicit:
+          authorizationUrl: https://identity.social_network.com/oauth/v1/authorize
+          scopes:
+            "write:post": Изменение постов
+            "read:post": Чтение постов
