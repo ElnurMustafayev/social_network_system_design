@@ -1,0 +1,810 @@
+openapi: 3.0.4
+
+info:
+  title: social_network api - OpenAPI 3.0
+  description: |-
+    Документация, написанная для social_network API базированная на [OpenAPI 3.1.1 спецификациях](https://swagger.io/specification/#version_3.1.1)
+
+    Полезные ссылки:
+    - [web editor](https://editor.swagger.io/)
+    - [vs code extension](https://marketplace.visualstudio.com/items?itemName=42Crunch.vscode-openapi)
+  version: 1.0.0
+  contact:
+    email: elnur.mustafayeev@gmail.com
+  license:
+    name: Apache 2.0
+    url: https://www.apache.org/licenses/LICENSE-2.0.html
+
+externalDocs:
+  description: social_network repository
+  url: https://github.com/ElnurMustafayev/social_network_system_design
+
+servers:
+  - url: https://social_network.com/api/v1
+
+tags:
+  - name: post
+    description: Пост, который публикуется на сайте пользователем
+    externalDocs:
+      description: Сущность представлена в этом файле
+      url: https://github.com/ElnurMustafayev/social_network_system_design/blob/main/Entities.md
+  
+  - name: reaction
+    description: Реакция, которую пользователь ставит на пост
+    externalDocs:
+      description: Сущность представлена в этом файле
+      url: https://github.com/ElnurMustafayev/social_network_system_design/blob/main/Entities.md
+  
+  - name: comment
+    description: Комментарий, который пользователь пишет под постом
+    externalDocs:
+      description: Сущность представлена в этом файле
+      url: https://github.com/ElnurMustafayev/social_network_system_design/blob/main/Entities.md
+
+paths:
+  # POST
+  /post:
+    post:
+      tags:
+        - post
+      summary: Создание нового поста
+      description: |
+        Пост создаётся со статусом **Draft**
+        1. Для **добавления медиа** в новый пост необходимо использовать: *POST: /post/{postId}/media*
+        2. Для того, **чтобы пост видели все пользователи** необходимо использовать: *POST: /post/{postId}/complete*
+      operationId: createPost
+      parameters:
+        - name: auto_publish
+          description: В случае, если в посте нет медиафайлов и нет смысла делать промежуточное создание - значение **auto_publish=true** создаёт пост сразу со статусом **Published**
+          in: query
+          required: false
+          schema:
+            type: boolean
+      requestBody:
+        description: Модель поста
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AddPostRequestDto'
+      responses:
+        '201':
+          description: Пост успешно создался
+          headers:
+            location:
+              description: Ссылка на получение созданного ресурса в будущем
+              schema:
+                type: string
+                example: "/post/{postId}"
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PostCreatedResponseDto'
+        '400':
+          description: Ошибка входных параметров
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BadRequestResponseDto'
+              example:
+                message: "Location could not contain negative values"
+                code: CUSTOM_VALIDATION
+        '500':
+          description: Непредвиденная ошибка
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InternalServerErrorResponseDto"
+      security:
+        - OAuth:
+            - write:post
+
+  /post/{postId}/media:
+    post:
+      summary: Добавление медиафайлов к созданному посту
+      tags:
+        - post
+      parameters:
+        - name: postId
+          description: ID созданного поста
+          required: true
+          in: path
+          schema:
+            type: integer
+            format: int64
+            example: 100500
+      requestBody:
+        description: Список медиафайлов
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: 
+                - files
+              properties:
+                files:
+                  type: array
+                  items:
+                    type: string
+                    format: binary
+            encoding:
+              files:
+                contentType: image/png, image/jpeg
+      responses:
+        '201':
+          description: Медиафайлы успешно добавлены к посту
+          headers:
+            location:
+              description: Ссылка на получение созданного ресурса в будущем
+              schema:
+                type: string
+                example: "/post/{postId}/media/{mediaId}"
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/PhotoDto"
+              examples:
+                singleMedia:
+                  summary: При загрузке 1 медиафайла
+                  value:
+                    id: 32abcc57-e7e1-4cac-b6c8-25801c7bf6b9
+                    is_preview: true
+                multipleMedia:
+                  summary: При загрузке нескольких медиафайлов
+                  description: Из примера видно, что в превью поста всегда будет первый медиафайл в списке
+                  value:
+                    - id: 32abcc57-e7e1-4cac-b6c8-25801c7bf6b9
+                      is_preview: true
+                    - id: 32abcc57-e7e1-4cac-b6c8-25801c7bf6b9
+        '400':
+          description: Ошибка входных параметров
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BadRequestResponseDto'
+              examples:
+                mediaLarge:
+                  summary: Медиафайлы слишком большие
+                  value:
+                    message: "Media files are too large"
+                    code: "VALUE_OUT_OF_RANGE"
+                postNotFound:
+                  summary: Пост не найден по ID
+                  value:
+                    message: Incorrect postId
+                    code: INVALID_PARAM
+        '500':
+          description: Непредвиденная ошибка
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InternalServerErrorResponseDto"
+      security:
+        - OAuth:
+            - write:post
+
+  /post/{postId}/complete:
+    post:
+      summary: Публикация поста со всем загруженным материалом
+      description: |
+        Меняется статус поста: **Draft** -> **Published**
+        
+        Отныне пользователи видят его
+      tags:
+        - post
+      parameters: 
+        - name: postId
+          description: ID уже созданного поста со статусом **Draft**
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+      responses:
+        '204':
+          description: |
+            Статус поста успешно поменялся на **Published**
+            
+            > Метод идемпотентный, таким образом, если пост изначально был со статусом **Published**, то всё равно вернётся код 204 (ошибки не будет)
+        '400':
+          description: Ошибка входных параметров
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BadRequestResponseDto'
+              example:
+                message: "Incorrect postId"
+                code: "INVALID_PARAM"
+        '500':
+          description: Непредвиденная ошибка
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InternalServerErrorResponseDto"
+      security:
+        - OAuth:
+            - write:post
+
+  /post/{postId}:
+    get:
+      summary: Получение любого поста по его ID 
+      operationId: getPostById
+      tags:
+        - post
+      parameters:
+        - name: postId
+          in: path
+          required: true
+          description: ID поста, который необходимо получить
+          schema:
+            type: integer
+            format: int64
+            example: 100500
+      responses:
+        '200':
+          description: Пост успешно найден
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PostDto'
+        '400':
+          description: Ошибка входных параметров
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BadRequestResponseDto'
+              example:
+                message: ID can not be less than 0
+                code: CUSTOM_VALIDATION
+        '404':
+          description: Ошибка входных параметров
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotFoundResponseDto'
+              example:
+                message: Post not found
+        '500':
+          description: Непредвиденная ошибка
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InternalServerErrorResponseDto"
+      security:
+        - OAuth:
+            - "read:post"
+
+  /post/feed:
+    get: 
+      summary: Получение ленты с пагинацией
+      tags:
+        - post
+      parameters:
+        - name: cursor
+          in: query
+          required: true
+          description: ID последнего элемента в ленте
+          schema:
+            type: integer
+            format: int64
+            example: 100000
+        - name: size
+          in: query
+          required: true
+          description: Количество элементов страницы пагинации
+          schema:
+            type: integer
+            format: int32
+            example: 10
+      responses:
+        '200':
+          description: Лента успешно обновлена
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: "#/components/schemas/PostDto"
+                  - $ref: "#/components/schemas/PaginatedByCursorResponseDto"
+              examples:
+                postsExist:
+                  summary: в ленте есть посты
+                  
+                postsDoesntExist:
+                  summary: в ленте нет постов
+                  value:
+                    data: []
+                    page_size: 0
+        '400':
+          description: Ошибка входных параметров
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BadRequestResponseDto'
+              example:
+                message: size could not be greated than 100!
+                code: VALUE_OUT_OF_RANGE
+        '500':
+          description: Непредвиденная ошибка
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InternalServerErrorResponseDto"
+      security:
+        - OAuth:
+            - "read:post"
+
+
+  # REACTION
+  /reaction/post/{postId}/toggle:
+    post:
+      summary: Ставит/убирает выбранную реакцию с поста
+      description: |
+        - Пользователь может поставить **только 1 из реакций**
+        - В случае, если реакция была поставлена и пользователь добавляет другую:\
+        новая реакция ставится, старая автоматически удаляется
+      tags:
+        - reaction
+      parameters: 
+        - name: postId
+          description: ID поста
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+            example: 100500
+      requestBody:
+        content:
+          application/json:
+            schema:
+              properties:
+                reaction: 
+                  $ref: '#/components/schemas/ReactionEnum'
+      responses:
+        '200':
+          description: Операция прошла успешно
+          content:
+            application/json:
+              schema:
+                properties:
+                  added:
+                    type: boolean
+              examples:
+                reactionAdded:
+                  summary: Реакция была поставлена
+                  value:
+                    added: true
+                reactionRemoved:
+                  summary: Реакция была убрана
+                  value:
+                    added: false
+        '400':
+          description: Ошибка входных параметров
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BadRequestResponseDto'
+              example:
+                message: Incorrect postId
+                code: INVALID_PARAM
+        '500':
+          description: Непредвиденная ошибка
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InternalServerErrorResponseDto"
+      security:
+        - OAuth:
+            - "write:reaction"
+
+  /reaction/{postId}/all:
+    get:
+      summary: Получение списка реакций и количества каждой
+      tags:
+        - reaction
+      parameters: 
+        - name: postId
+          description: ID поста
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+            example: 100500
+      responses:
+        '200':
+          description: Список реакций успешно удалось получить
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ReactionDto'
+              examples:
+                default:
+                  $ref: '#/components/examples/ReactionListExample'
+        '400':
+          description: Ошибка входных параметров
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BadRequestResponseDto'
+              example:
+                message: Incorrect postId
+                code: INVALID_PARAM
+        '500':
+          description: Непредвиденная ошибка
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InternalServerErrorResponseDto"
+      security:
+        - OAuth:
+            - "read:reaction"
+
+
+  # COMMENT
+  /comment/{postId}:
+    post:
+      summary: Написание комментария
+      tags: 
+        - comment
+      parameters: 
+        - name: postId
+          description: ID поста
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+            example: 100500
+      requestBody:
+        description: Текст комментария в кодировке **UTF-8**
+        content:
+          text/plain:
+            schema:
+              type: string
+              example: This is comment text
+          application/json:
+            schema:
+              properties:
+                text:
+                  type: string
+      responses:
+        '201':
+          description: Комментарий успешно добавлен
+          headers:
+            location:
+              description: Ссылка на получение созданного ресурса в будущем
+              schema:
+                type: string
+                example: "/comment/{postId}"
+          content:
+            application/json:
+              schema:
+                description: Модель ответа при создании комментария
+                properties:
+                  id:
+                    description: ID созданного комментария
+                    type: integer
+                    format: int64
+                    example: 7780897820
+        '400':
+          description: Ошибка входных параметров
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BadRequestResponseDto'
+              example:
+                message: Incorrect postId
+                code: INVALID_PARAM
+        '500':
+          description: Непредвиденная ошибка
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InternalServerErrorResponseDto"
+      security:
+        - OAuth:
+            - "write:comment"
+
+    get:
+      summary: Получение всех комментариев под постом с пагинацией
+      tags: 
+        - comment
+      parameters: 
+        - name: postId
+          description: ID поста
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+            example: 100500
+        - name: cursor
+          in: query
+          required: true
+          description: ID последнего элемента в ленте
+          schema:
+            type: integer
+            format: int64
+            example: 367778676
+        - name: size
+          in: query
+          required: true
+          description: Количество элементов страницы пагинации
+          schema:
+            type: integer
+            format: int32
+            example: 10
+      responses:
+        '200':
+          description: Комментарии успешно получены
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: "#/components/schemas/CommentDto"
+                  - $ref: "#/components/schemas/PaginatedByCursorResponseDto"
+        '400':
+          description: Ошибка входных параметров
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BadRequestResponseDto'
+              example:
+                message: Incorrect postId
+                code: INVALID_PARAM
+        '500':
+          description: Непредвиденная ошибка
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InternalServerErrorResponseDto"
+      security:
+        - OAuth:
+            - "read:comment"
+
+components:
+  examples:
+    ReactionListExample:
+      summary: Список всех реакций под постом
+      value:
+        - { type: LIKE, count: 63 }
+        - { type: DISLIKE, count: 1 }
+        - { type: SUPER, count: 5 }
+        - { type: HOT, count: 0 }
+        - { type: OMG, count: 2 }
+
+  schemas:
+    # Model schemas
+    PhotoDto:
+      type: object
+      required:
+        - id
+        - path
+      properties:
+        id:
+          type: string
+          format: uid
+          example: '32abcc57-e7e1-4cac-b6c8-25801c7bf6b9'
+        is_preview:
+          description: Под идним постом может быть только 1 превью изображение. Это поле указывает на это
+          type: boolean
+          example: true
+
+    LocationDto: 
+      type: object
+      required:
+        - longitude
+        - latitude
+      properties:
+        longitude:
+          type: integer
+          format: float
+          example: 40.1521651
+        latitude:
+          type: integer
+          format: float
+          example: 47.615563
+
+    PostDto:
+      type: object
+      description: Модель поста
+      required:
+        - id
+        - title
+        - text
+        - author_id
+        - created_at
+        - reactions_count
+      properties:
+        id:
+          description: Идентификатор поста
+          type: number
+          format: int64
+          example: 100500
+        title: 
+          description: Заглавие поста
+          type: string
+          example: This is title
+        text:
+          type: string
+          description: Описание поста
+          example: This is description
+        author_id:
+          description: Идентификатор автора поста
+          type: number
+          format: int64
+          example: 700
+        created_at:
+          description: Дата и время создания поста в системе
+          type: string
+          format: date-time
+          example: '05-08-2025'
+        reactions_count:
+          description: Суммарное количество всех реакций
+          type: number
+          format: int64
+        photos:
+          type: array
+          items:
+            $ref: "#/components/schemas/PhotoDto"
+        location: 
+          $ref: '#/components/schemas/LocationDto'
+
+    ReactionDto:
+      description: Модель реакции
+      required: 
+        - type
+        - count
+      properties:
+        type:
+          $ref: '#/components/schemas/ReactionEnum'
+        count:
+          description: Количество реакций
+          type: integer
+          format: int64
+
+    CommentDto:
+      description: Модель комментария
+      required: 
+        - id
+        - text
+      properties:
+        id:
+          description: Идектификатор комментария
+          type: integer
+          format: int64
+          example: 7780897820
+          minimum: 0
+          exclusiveMinimum: false
+        text:
+          description: Текст комментария
+          type: string
+          minLength: 1
+          maxLength: 1000
+          example: This is comment text
+
+    ReactionEnum:
+      description: Тип реакции
+      type: string
+      format: enum
+      enum: [LIKE, DISLIKE, SUPER, HOT, OMG]
+      example: LIKE
+
+
+    # API endpoint DTO schemas
+    AddPostRequestDto:
+      type: object
+      required:
+        - title
+        - text
+      properties:
+        title: 
+          type: string
+          example: This is title
+        text:
+          type: string
+          example: This is description
+        location: 
+          $ref: '#/components/schemas/LocationDto'
+
+    PostCreatedResponseDto:
+      required:
+        - id
+      type: object
+      properties:
+        id:
+          description: ID созданного поста
+          type: integer
+          format: int64
+          example: 100500
+
+    PaginatedByCursorResponseDto:
+      required:
+        - page_size
+      properties:
+        page_size:
+          description: Количество элементов в текущей странице
+          type: integer
+          format: int32
+          example: 1
+          readOnly: true
+
+
+    # API DTO schemas
+    BadRequestResponseDto:
+      description: Модель описывающая ошибку 400
+      required:
+        - message
+        - code
+      properties:
+        message:
+          type: string
+          example: Incorrect DateTime format!
+        code:
+          $ref: '#/components/schemas/ValidationEnum'
+
+    NotFoundResponseDto:
+      description: Модель описывающая ошибку 404
+      required: 
+        - message
+      properties:
+        message:
+          type: string
+          description: Сообщение ошибки, в котором показывается, что не нашлось
+          example: Entity not found!
+
+    InternalServerErrorResponseDto:
+      description: Модель описывающая ошибку 500
+      required:
+        - message
+      properties:
+        message:
+          type: string
+          description: Капсулированная от клиента ошибка, которая абстрактно описывает произошедшую ситуацию на стороне сервера
+          example: Internal server error!
+
+    ValidationEnum:
+      description: Тип валидации
+      type: string
+      format: enum
+      enum:
+        - CUSTOM_VALIDATION
+        - INCORRECT_FORMAT
+        - VALUE_OUT_OF_RANGE
+        - INVALID_PARAM
+      example: INCORRECT_FORMAT
+
+  securitySchemes:
+    Bearer:
+      type: apiKey
+      name: Authorize
+      in: header
+    
+    OAuth:
+      type: oauth2
+      flows:
+        implicit:
+          authorizationUrl: https://identity.social_network.com/oauth/v1/authorize
+          scopes:
+            "write:post": Изменение постов
+            "read:post": Чтение постов
+            "write:reaction": Изменение реакций
+            "read:reaction": Чтение реакций
+            "write:comment": Изменение комментариев
+            "read:comment": Чтение комментариев
