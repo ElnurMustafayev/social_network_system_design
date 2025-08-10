@@ -1,0 +1,72 @@
+// Docs: https://dbml.dbdiagram.io/docs/
+// Editor: https://dbdiagram.io/d
+
+enum post_status {
+  draft [note: 'Когда пост только создался']
+  published [note: 'После вызыва метода *complete*']
+  deleted [note: 'После soft удаления поста']
+}
+
+enum post_reaction_type {
+  like
+  dislike
+  super
+  hot
+  omg
+}
+
+table users as u {
+  id integer [pk, increment, not null]
+  username varchar(50) [unique, not null]
+  email varchar(70) [unique, not null]
+  password_hash varchar(200) [not null]
+}
+
+table posts as p {
+  id integer [pk, increment, not null]
+  title nvarchar(100) [not null]
+  text nvarchar(100) [not null]
+  author_id integer [ref: > users.id, not null]
+  reactions_count integer [not null, default: 0]
+  created_at datetime [not null, default: `now()`]
+  status post_status [not null, default: `draft`]
+  longitude float [null]
+  latitude float [null]
+
+  Note {
+    'Посты пользователей'
+  }
+}
+
+table post_reactions as pr {
+  post_id integer [ref: > posts.id, not null]
+  reaction_type post_reaction_type [not null]
+  count integer [not null, default: 0]
+
+  indexes {
+    (post_id, reaction_type) [name: 'idx_post_id_reaction_type', unique]
+  }
+}
+
+table post_photos as pp {
+  photo_id uuid [pk, increment, not null]
+  post_id integer [ref: > posts.id, not null]
+  photo_url varchar(200) [not null]
+  is_preview boolean
+  created_at datetime [not null, default: `now()`]
+
+  indexes {
+    (photo_id, post_id) [name: 'idx_photo_id_post_id', unique]
+  }
+}
+
+table post_comments as pc {
+  comment_id integer [pk, increment, not null]
+  post_id integer [ref: > posts.id, not null]
+  author_id integer [ref: > users.id, not null]
+  created_at datetime [not null, default: `now()`]
+
+  indexes {
+    (comment_id, post_id) [name: 'idx_comment_id_post_id', unique]
+  }
+}
