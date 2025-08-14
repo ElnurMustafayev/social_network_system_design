@@ -1,0 +1,38 @@
+enum post_reaction_type {
+  like
+  dislike
+  super
+  hot
+  omg
+}
+
+table posts as p {
+  id integer [pk, not null]
+}
+
+table users as u {
+  id integer [pk, not null]
+  username varchar(50) [unique, not null]
+  email varchar(70) [unique, not null]
+}
+
+table post_user_reactions as pur {
+  post_id integer [ref: > posts.id, not null]
+  author_id integer [ref: > users.id, not null]
+  reaction_type post_reaction_type [not null]
+  created_at datetime [not null, default: `now()`]
+
+  indexes {
+    (post_id, author_id) [name: 'idx_postid_authorid', unique]
+  }
+}
+
+table post_reactions_count as prc {
+  post_id integer [ref: > posts.id, not null]
+  reaction_type post_reaction_type [not null]
+  count integer 
+
+  indexes {
+    (post_id, reaction_type) [name: 'idx_postid_reactiontype', unique]
+  }
+}

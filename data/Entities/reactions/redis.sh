@@ -1,0 +1,1 @@
+HGETALL post:123:reactions => {LIKE:63, DISLIKE:1, SUPER:5, HOT:0, OMG:2}

@@ -1,0 +1,20 @@
+table posts as p {
+  id integer [pk, not null]
+}
+
+table users as u {
+  id integer [pk, not null]
+  username varchar(50) [unique, not null]
+  email varchar(70) [unique, not null]
+}
+
+table post_user_comments as pc {
+  comment_id integer [pk, increment, not null]
+  post_id integer [ref: > posts.id, not null]
+  author_id integer [ref: > users.id, not null]
+  created_at datetime [not null, default: `now()`]
+
+  indexes {
+    (comment_id, post_id) [name: 'idx_commentid_postid', unique]
+  }
+}
